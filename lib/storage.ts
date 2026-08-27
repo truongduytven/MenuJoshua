@@ -122,16 +122,15 @@ export const FOOD_PRESET_IMAGES = [
 ];
 
 export function getStoredRestaurants(): Restaurant[] {
-  if (typeof window === 'undefined') return INITIAL_RESTAURANTS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(RESTAURANTS_KEY);
     if (!raw) {
-      localStorage.setItem(RESTAURANTS_KEY, JSON.stringify(INITIAL_RESTAURANTS));
-      return INITIAL_RESTAURANTS;
+      return [];
     }
     return JSON.parse(raw);
   } catch {
-    return INITIAL_RESTAURANTS;
+    return [];
   }
 }
 

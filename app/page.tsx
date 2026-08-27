@@ -75,16 +75,11 @@ function MainApp() {
     document.documentElement.setAttribute('data-theme', loadedTheme);
     setIsLoaded(true);
 
-    // Fetch fresh data from Neon PostgreSQL database
+    // Fetch data from Neon PostgreSQL database
     fetchRestaurantsApi()
       .then((dbData) => {
-        if (dbData && dbData.length > 0) {
-          setRestaurants(dbData);
-          saveStoredRestaurants(dbData);
-        } else if (loadedRestaurants.length > 0) {
-          // If DB is empty but we have local restaurants, seed them into DB
-          bulkUpdateRestaurantsApi(loadedRestaurants, 'append').catch(console.error);
-        }
+        setRestaurants(dbData || []);
+        saveStoredRestaurants(dbData || []);
       })
       .catch((err) => {
         console.warn('Could not sync from database, using cached local data:', err);
