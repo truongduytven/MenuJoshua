@@ -5,6 +5,8 @@ import { Restaurant } from '@/types/restaurant';
 import {
   X,
   Upload,
+  Link as LinkIcon,
+  Image as ImageIcon,
   Sparkles,
   MapPin,
   Check,
@@ -157,78 +159,101 @@ export function AddEditRestaurantModal({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
-          {/* Section 1: Image Upload & Paste Area */}
-          <div>
-            <label className="block font-bold text-xs text-[var(--color-text-primary)] mb-1.5 flex items-center justify-between">
-              <span>Hình ảnh quán / món ăn</span>
-              <span className="text-[11px] text-[var(--color-primary)] font-semibold">
-                📷 Có thể bấm Ctrl/Cmd + V để paste ảnh chụp màn hình
-              </span>
-            </label>
+          {/* Section 1: Image URL Input & Preview */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-xs text-[var(--color-text-primary)]">
+                Đường dẫn ảnh (Image URL)
+              </label>
+              <label className="text-[11px] text-[var(--color-primary)] font-bold cursor-pointer hover:underline flex items-center gap-1">
+                <Upload className="w-3 h-3" />
+                <span>Tải ảnh từ máy</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleFileUpload(e.target.files[0]);
+                    }
+                  }}
+                />
+              </label>
+            </div>
 
-            {/* Drop / Paste Zone */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
-                isDragOver
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
-                  : 'border-[var(--color-border)] hover:border-[var(--color-primary)] bg-[var(--color-surface-subtle)]'
-              }`}
-            >
+            {/* URL Input */}
+            <div className="relative">
+              <LinkIcon className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleFileUpload(e.target.files[0]);
-                  }
-                }}
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="Dán link ảnh tại đây (https://images.unsplash.com/... hoặc link ảnh bất kỳ)"
+                className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-light)]"
               />
-
-              {imageUrl ? (
-                <div className="relative group/preview w-full h-44 rounded-xl overflow-hidden">
-                  <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <span className="text-xs font-bold text-white bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-                      Bấm để thay đổi ảnh
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setImageUrl('');
-                      }}
-                      className="text-xs font-bold text-rose-300 bg-rose-950/80 px-3 py-1.5 rounded-lg"
-                    >
-                      Xóa ảnh
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-4 flex flex-col items-center justify-center text-[var(--color-text-secondary)]">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] flex items-center justify-center shadow-xs mb-2">
-                    <Upload className="w-6 h-6" />
-                  </div>
-                  <p className="font-bold text-xs text-[var(--color-text-primary)]">
-                    Kéo thả ảnh vào đây hoặc click để tải lên
-                  </p>
-                  <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
-                    Hỗ trợ paste trực tiếp từ clipboard (Ctrl + V / Cmd + V)
-                  </p>
-                </div>
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-500 hover:text-stone-700 dark:hover:text-stone-200 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               )}
             </div>
 
+            {/* Image Preview or Drop Zone */}
+            {imageUrl ? (
+              <div className="relative group/preview w-full h-44 rounded-2xl overflow-hidden border border-[var(--color-border)] bg-stone-900 shadow-xs">
+                <img
+                  src={imageUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover/preview:scale-105"
+                  onError={(e) => {
+                    // Fallback on broken image link
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-end justify-between p-3">
+                  <span className="text-[11px] font-bold text-white/90 bg-black/50 px-2.5 py-1 rounded-lg backdrop-blur-sm">
+                    Xem trước ảnh
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="text-xs font-bold text-rose-300 bg-rose-950/80 hover:bg-rose-900 px-3 py-1 rounded-lg transition-colors"
+                  >
+                    Xóa ảnh này
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-3.5 text-center cursor-pointer transition-all ${
+                  isDragOver
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
+                    : 'border-[var(--color-border)] hover:border-[var(--color-primary)] bg-[var(--color-surface-subtle)]'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2 text-[var(--color-text-secondary)]">
+                  <ImageIcon className="w-4 h-4 text-[var(--color-primary)]" />
+                  <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                    Chưa có ảnh (Bạn có thể dán link URL ở trên, kéo thả ảnh hoặc bấm Ctrl+V)
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Quick Preset Photos Selector */}
-            <div className="mt-2.5">
+            <div className="pt-1">
               <span className="text-[11px] font-bold text-[var(--color-text-muted)]">
                 Hoặc chọn nhanh ảnh mẫu có sẵn:
               </span>
