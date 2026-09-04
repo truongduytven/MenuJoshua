@@ -13,7 +13,11 @@ export const metadata: Metadata = {
   title: "Ăn Gì Hôm Nay? - Bộ chọn quán ăn thông minh & vui vẻ",
   description: "Lưu danh sách những quán ăn yêu thích và quay chọn quán ăn ngẫu nhiên hôm nay cùng bạn bè và người yêu!",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", sizes: "128x128", type: "image/png" },
+    ],
+    apple: "/apple-icon.png",
   },
 };
 

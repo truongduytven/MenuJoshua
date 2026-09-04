@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Plus, Volume2, VolumeX, Palette, UtensilsCrossed, Flame, Database } from 'lucide-react';
+import Image from 'next/image';
+import { Plus, Volume2, VolumeX, Palette, Flame, Database } from 'lucide-react';
 import { soundManager } from '@/lib/audio';
 
 interface NavbarProps {
@@ -29,10 +30,17 @@ export function Navbar({
     <header className="sticky top-0 z-30 bg-[var(--color-background)]/90 backdrop-blur-md transition-colors border-b border-[var(--color-border)]/50">
       <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 sm:h-18 flex items-center justify-between gap-2 sm:gap-3">
         {/* Brand Logo & Name */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           <div className="relative group cursor-pointer shrink-0">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-secondary)] text-white flex items-center justify-center shadow-md shadow-[var(--color-primary)]/25 transform group-hover:scale-105 group-hover:rotate-6 transition-all duration-300">
-              <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl overflow-hidden shadow-md shadow-[var(--color-primary)]/25 ring-2 ring-white dark:ring-stone-800 transform group-hover:scale-105 group-hover:rotate-3 transition-all duration-300 bg-stone-900 flex items-center justify-center">
+              <Image
+                src="/logo.png"
+                alt="Ăn Gì Hôm Nay Logo"
+                width={44}
+                height={44}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
           </div>
 

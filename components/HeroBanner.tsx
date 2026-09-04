@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Sparkles, Dices } from 'lucide-react';
 import { soundManager } from '@/lib/audio';
 
@@ -17,15 +18,24 @@ export function HeroBanner({ onOpenPicker, onOpenAddModal, restaurantCount }: He
       <div className="absolute -top-12 -right-12 w-56 h-56 rounded-full bg-white/15 blur-2xl pointer-events-none" />
       <div className="absolute -bottom-12 -left-12 w-56 h-56 rounded-full bg-black/10 blur-2xl pointer-events-none" />
 
+      {/* Featured Logo Mascot Graphic */}
+      <div className="absolute top-1/2 -translate-y-1/2 right-4 lg:right-10 w-44 h-44 md:w-56 md:h-56 lg:w-64 lg:h-64 rounded-3xl overflow-hidden shadow-2xl shadow-black/30 border-4 border-white/30 hidden sm:flex items-center justify-center bg-stone-900/20 backdrop-blur-xs transform hover:rotate-2 hover:scale-105 transition-all duration-500 z-0">
+        <Image
+          src="/logo.png"
+          alt="Ăn Gì Hôm Nay Mascot Logo"
+          width={256}
+          height={256}
+          className="w-full h-full object-cover"
+          priority
+        />
+      </div>
+
       {/* Floating appetizing stickers */}
-      <div className="absolute top-4 right-8 text-3xl sm:text-4xl select-none animate-float-food hidden sm:block">
+      <div className="absolute top-3 right-52 text-2xl sm:text-3xl select-none animate-float-food hidden lg:block pointer-events-none">
         🍜
       </div>
-      <div className="absolute bottom-4 right-24 text-3xl sm:text-4xl select-none animate-float-food [animation-delay:1.5s] hidden sm:block">
+      <div className="absolute bottom-3 right-64 text-2xl sm:text-3xl select-none animate-float-food [animation-delay:1.5s] hidden lg:block pointer-events-none">
         🍕
-      </div>
-      <div className="absolute top-12 right-40 text-2xl select-none animate-float-food [animation-delay:0.8s] hidden md:block">
-        🍣
       </div>
 
       <div className="relative z-10 max-w-xl">
