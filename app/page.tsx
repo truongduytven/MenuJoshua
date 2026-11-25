@@ -13,6 +13,7 @@ import {
 import { soundManager } from '@/lib/audio';
 import {
   fetchRestaurantsApi,
+  uploadImageApi,
   saveRestaurantApi,
   updateRestaurantApi,
   deleteRestaurantApi,
@@ -111,12 +112,14 @@ function MainApp() {
 
   // Bulk update restaurants handler (for JSON import / reset / bulk delete)
   const handleUpdateAllRestaurants = async (newList: Restaurant[]) => {
-    setRestaurants(newList);
-    saveStoredRestaurants(newList);
     try {
-      await bulkUpdateRestaurantsApi(newList, 'replace');
+      const savedList = await bulkUpdateRestaurantsApi(newList, 'replace');
+      setRestaurants(savedList);
+      saveStoredRestaurants(savedList);
     } catch (e) {
       console.error('Failed to sync bulk update to DB:', e);
+      setRestaurants(newList);
+      saveStoredRestaurants(newList);
     }
   };
 
@@ -200,33 +203,44 @@ function MainApp() {
   // Save new or updated restaurant
   const handleSaveRestaurant = async (item: Restaurant) => {
     const exists = restaurants.some((r) => r.id === item.id);
-    let updated: Restaurant[];
-
-    if (exists) {
-      updated = restaurants.map((r) => (r.id === item.id ? item : r));
-      showToast({
-        title: '✓ Đã cập nhật thông tin quán!',
-        description: item.name,
-        type: 'success',
-      });
-    } else {
-      updated = [item, ...restaurants];
-      showToast({
-        title: '🎉 Đã thêm quán mới vào danh sách!',
-        description: item.name,
-        type: 'success',
-      });
-    }
-
-    setRestaurants(updated);
-    saveStoredRestaurants(updated);
-    setIsAddEditOpen(false);
-    setEditingRestaurant(null);
 
     try {
-      await saveRestaurantApi(item);
-    } catch (e) {
+      let itemToSave = item;
+      if (/^data:image\/[a-zA-Z0-9+.-]+;base64,/i.test(item.imageUrl)) {
+        const uploadedUrl = await uploadImageApi(item.imageUrl, item.id);
+        itemToSave = { ...item, imageUrl: uploadedUrl };
+      }
+
+      const savedItem = await saveRestaurantApi(itemToSave);
+      const updated = exists
+        ? restaurants.map((r) => (r.id === savedItem.id ? savedItem : r))
+        : [savedItem, ...restaurants];
+
+      setRestaurants(updated);
+      saveStoredRestaurants(updated);
+      if (viewingRestaurant?.id === savedItem.id) {
+        setViewingRestaurant(savedItem);
+      }
+      if (winningRestaurant?.id === savedItem.id) {
+        setWinningRestaurant(savedItem);
+      }
+      setIsAddEditOpen(false);
+      setEditingRestaurant(null);
+
+      showToast({
+        title: exists ? '✓ Đã cập nhật thông tin quán!' : '🎉 Đã thêm quán mới vào danh sách!',
+        description: savedItem.name,
+        type: 'success',
+      });
+    } catch (e: unknown) {
       console.error('Failed to save restaurant to DB:', e);
+      const message = e instanceof Error ? e.message : 'Không thể tải ảnh hoặc lưu quán ăn';
+      showToast({
+        title: 'Lưu quán thất bại',
+        description: message,
+        type: 'error',
+      });
+      throw e;
     }
   };
 

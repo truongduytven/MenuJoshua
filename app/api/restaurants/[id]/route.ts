@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { resolveRestaurantImageUrl } from '@/lib/cloudinary';
 import { mapRowToRestaurant } from '../route';
 
 // PUT or PATCH /api/restaurants/[id]
@@ -19,7 +20,10 @@ export async function PUT(
     const current = existing[0];
     const name = body.name !== undefined ? body.name : current.name;
     const address = body.address !== undefined ? body.address : current.address;
-    const imageUrl = body.imageUrl !== undefined ? body.imageUrl : current.image_url;
+    const imageUrl =
+      body.imageUrl !== undefined
+        ? await resolveRestaurantImageUrl(body.imageUrl, id)
+        : current.image_url;
     const note = body.note !== undefined ? body.note : current.note;
     const isFavorite = body.isFavorite !== undefined ? Boolean(body.isFavorite) : current.is_favorite;
     const eaten = body.eaten !== undefined ? Boolean(body.eaten) : current.eaten;

@@ -20,7 +20,7 @@ interface AddEditRestaurantModalProps {
   isOpen: boolean;
   initialData?: Restaurant | null;
   onClose: () => void;
-  onSave: (restaurant: Restaurant) => void;
+  onSave: (restaurant: Restaurant) => Promise<void> | void;
 }
 
 export function AddEditRestaurantModal({
@@ -35,6 +35,7 @@ export function AddEditRestaurantModal({
   const [eaten, setEaten] = useState(false);
   const [note, setNote] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
@@ -107,14 +108,12 @@ export function AddEditRestaurantModal({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-
-    soundManager.playSuccessChime();
+    if (!name.trim() || isSaving) return;
 
     const newRestaurant: Restaurant = {
-      id: initialData?.id || 'res-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+      id: initialData?.id || 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
       name: name.trim(),
       address: address.trim(),
       imageUrl: imageUrl.trim(),
@@ -124,7 +123,15 @@ export function AddEditRestaurantModal({
       note: note.trim() || undefined,
     };
 
-    onSave(newRestaurant);
+    setIsSaving(true);
+    try {
+      await onSave(newRestaurant);
+      soundManager.playSuccessChime();
+    } catch {
+      // Error toast is handled by parent onSave
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -186,7 +193,7 @@ export function AddEditRestaurantModal({
             <div className="relative">
               <LinkIcon className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
-                type="url"
+                type="text"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="Dán link ảnh tại đây (https://images.unsplash.com/... hoặc link ảnh bất kỳ)"
@@ -357,20 +364,27 @@ export function AddEditRestaurantModal({
           <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-end gap-2.5">
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => {
                 soundManager.playClick();
                 onClose();
               }}
-              className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]"
+              className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] disabled:opacity-50"
             >
               Hủy bỏ
             </button>
             <button
               type="submit"
-              disabled={!name.trim()}
+              disabled={!name.trim() || isSaving}
               className="btn-primary px-6 py-2.5 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {initialData ? 'Lưu thay đổi' : 'Thêm vào danh sách'}
+              {isSaving
+                ? imageUrl.trim().startsWith('data:image/')
+                  ? 'Đang tải ảnh & lưu...'
+                  : 'Đang lưu...'
+                : initialData
+                ? 'Lưu thay đổi'
+                : 'Thêm vào danh sách'}
             </button>
           </div>
         </form>

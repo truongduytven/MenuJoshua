@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { resolveRestaurantImageUrl } from '@/lib/cloudinary';
 import { Restaurant } from '@/types/restaurant';
 
 // Helper to convert DB snake_case row to Restaurant type
@@ -54,6 +55,30 @@ export async function GET() {
   }
 }
 
+// Resolve ID, timestamps, and upload base64 imageUrl to Cloudinary if needed
+async function prepareRestaurantForDb(item: Restaurant) {
+  const id = item.id || `res_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const imageUrl = await resolveRestaurantImageUrl(item.imageUrl, id);
+  const createdAt = item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString();
+  const eatenAt = item.eatenAt
+    ? new Date(item.eatenAt).toISOString()
+    : item.eaten
+    ? new Date().toISOString()
+    : null;
+
+  return {
+    id,
+    name: (item.name || '').trim(),
+    address: (item.address || '').trim(),
+    imageUrl,
+    note: item.note ? item.note.trim() : null,
+    isFavorite: Boolean(item.isFavorite),
+    eaten: Boolean(item.eaten),
+    eatenAt,
+    createdAt,
+  };
+}
+
 // POST /api/restaurants (create one or bulk insert / replace)
 export async function POST(req: NextRequest) {
   try {
@@ -63,22 +88,27 @@ export async function POST(req: NextRequest) {
     // Mode: 'bulk-replace' (replace entire list)
     if (body.mode === 'replace' && Array.isArray(body.items)) {
       const items: Restaurant[] = body.items;
+      // Upload any base64 images before deleting existing rows so failures don't wipe data
+      const preparedItems = [];
+      for (const item of items) {
+        preparedItems.push(await prepareRestaurantForDb(item));
+      }
 
       await sql`DELETE FROM restaurants;`;
 
-      for (const item of items) {
+      for (const prepared of preparedItems) {
         await sql`
           INSERT INTO restaurants (id, name, address, image_url, note, is_favorite, eaten, eaten_at, created_at)
           VALUES (
-            ${item.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`},
-            ${item.name},
-            ${item.address || ''},
-            ${item.imageUrl || ''},
-            ${item.note || null},
-            ${Boolean(item.isFavorite)},
-            ${Boolean(item.eaten)},
-            ${item.eatenAt ? new Date(item.eatenAt).toISOString() : null},
-            ${item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString()}
+            ${prepared.id},
+            ${prepared.name},
+            ${prepared.address},
+            ${prepared.imageUrl},
+            ${prepared.note},
+            ${prepared.isFavorite},
+            ${prepared.eaten},
+            ${prepared.eatenAt},
+            ${prepared.createdAt}
           );
         `;
       }
@@ -91,18 +121,19 @@ export async function POST(req: NextRequest) {
     if (body.mode === 'append' && Array.isArray(body.items)) {
       const items: Restaurant[] = body.items;
       for (const item of items) {
+        const prepared = await prepareRestaurantForDb(item);
         await sql`
           INSERT INTO restaurants (id, name, address, image_url, note, is_favorite, eaten, eaten_at, created_at)
           VALUES (
-            ${item.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`},
-            ${item.name},
-            ${item.address || ''},
-            ${item.imageUrl || ''},
-            ${item.note || null},
-            ${Boolean(item.isFavorite)},
-            ${Boolean(item.eaten)},
-            ${item.eatenAt ? new Date(item.eatenAt).toISOString() : null},
-            ${item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString()}
+            ${prepared.id},
+            ${prepared.name},
+            ${prepared.address},
+            ${prepared.imageUrl},
+            ${prepared.note},
+            ${prepared.isFavorite},
+            ${prepared.eaten},
+            ${prepared.eatenAt},
+            ${prepared.createdAt}
           )
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
@@ -121,26 +152,24 @@ export async function POST(req: NextRequest) {
 
     // Single item create / upsert
     const item: Restaurant = body;
-    if (!item.name) {
+    if (!item.name || !item.name.trim()) {
       return NextResponse.json({ success: false, error: 'Tên quán ăn là bắt buộc' }, { status: 400 });
     }
 
-    const id = item.id || `res_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const createdAt = item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString();
-    const eatenAt = item.eatenAt ? new Date(item.eatenAt).toISOString() : item.eaten ? new Date().toISOString() : null;
+    const prepared = await prepareRestaurantForDb(item);
 
     await sql`
       INSERT INTO restaurants (id, name, address, image_url, note, is_favorite, eaten, eaten_at, created_at)
       VALUES (
-        ${id},
-        ${item.name.trim()},
-        ${(item.address || '').trim()},
-        ${(item.imageUrl || '').trim()},
-        ${item.note ? item.note.trim() : null},
-        ${Boolean(item.isFavorite)},
-        ${Boolean(item.eaten)},
-        ${eatenAt},
-        ${createdAt}
+        ${prepared.id},
+        ${prepared.name},
+        ${prepared.address},
+        ${prepared.imageUrl},
+        ${prepared.note},
+        ${prepared.isFavorite},
+        ${prepared.eaten},
+        ${prepared.eatenAt},
+        ${prepared.createdAt}
       )
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -152,7 +181,7 @@ export async function POST(req: NextRequest) {
         eaten_at = EXCLUDED.eaten_at;
     `;
 
-    const savedRows = await sql`SELECT * FROM restaurants WHERE id = ${id};`;
+    const savedRows = await sql`SELECT * FROM restaurants WHERE id = ${prepared.id};`;
     return NextResponse.json({
       success: true,
       data: savedRows[0] ? mapRowToRestaurant(savedRows[0]) : null,

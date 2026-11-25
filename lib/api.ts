@@ -7,6 +7,19 @@ export async function fetchRestaurantsApi(): Promise<Restaurant[]> {
   return json.data;
 }
 
+export async function uploadImageApi(imageBase64: string, publicId?: string): Promise<string> {
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageUrl: imageBase64, publicId }),
+  });
+  const json = await res.json();
+  if (!json.success || !json.data?.url) {
+    throw new Error(json.error || 'Failed to upload image');
+  }
+  return json.data.url;
+}
+
 export async function saveRestaurantApi(restaurant: Restaurant): Promise<Restaurant> {
   const res = await fetch('/api/restaurants', {
     method: 'POST',
