@@ -7,17 +7,72 @@ export async function fetchRestaurantsApi(): Promise<Restaurant[]> {
   return json.data;
 }
 
-export async function uploadImageApi(imageBase64: string, publicId?: string): Promise<string> {
-  const res = await fetch('/api/upload', {
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+function estimateBase64Bytes(dataUri: string): number {
+  const commaIdx = dataUri.indexOf(',');
+  if (commaIdx === -1) return 0;
+  const base64Body = dataUri.slice(commaIdx + 1).replace(/\s+/g, '');
+  const padding = base64Body.endsWith('==') ? 2 : base64Body.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((base64Body.length * 3) / 4) - padding);
+}
+
+/**
+ * Upload an image File/Blob or base64 data URI directly to Cloudinary using a server-signed payload.
+ * Bypassing the Next.js API body avoids Vercel's 4.5MB serverless payload limit and supports up to 10MB.
+ */
+export async function uploadImageApi(image: File | Blob | string, publicId?: string): Promise<string> {
+  const byteSize = typeof image === 'string' ? estimateBase64Bytes(image) : image.size;
+  if (byteSize > MAX_IMAGE_BYTES) {
+    const sizeMb = (byteSize / (1024 * 1024)).toFixed(2);
+    throw new Error(`Dung lượng ảnh (${sizeMb} MB) vượt quá giới hạn tối đa 10MB.`);
+  }
+
+  const sigRes = await fetch('/api/upload/signature', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageUrl: imageBase64, publicId }),
+    body: JSON.stringify({ publicId }),
   });
-  const json = await res.json();
-  if (!json.success || !json.data?.url) {
-    throw new Error(json.error || 'Failed to upload image');
+  const sigJson = await sigRes.json();
+  if (!sigRes.ok || !sigJson.success || !sigJson.data?.signature) {
+    throw new Error(sigJson.error || 'Không thể lấy chữ ký upload ảnh');
   }
-  return json.data.url;
+
+  const sig = sigJson.data as {
+    cloudName: string;
+    apiKey: string;
+    timestamp: string;
+    folder: string;
+    signature: string;
+    publicId?: string;
+    overwrite?: string;
+  };
+
+  const form = new FormData();
+  form.append('file', image);
+  form.append('api_key', sig.apiKey);
+  form.append('timestamp', sig.timestamp);
+  form.append('folder', sig.folder);
+  if (sig.publicId) {
+    form.append('public_id', sig.publicId);
+  }
+  if (sig.overwrite) {
+    form.append('overwrite', sig.overwrite);
+  }
+  form.append('signature', sig.signature);
+
+  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  const uploadJson = await uploadRes.json();
+  if (!uploadRes.ok || !uploadJson?.secure_url) {
+    throw new Error(
+      uploadJson?.error?.message || `Upload ảnh lên Cloudinary thất bại (${uploadRes.status})`
+    );
+  }
+
+  return uploadJson.secure_url as string;
 }
 
 export async function saveRestaurantApi(restaurant: Restaurant): Promise<Restaurant> {

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isBase64Image, uploadBase64ToCloudinary } from '@/lib/cloudinary';
+import {
+  MAX_IMAGE_BYTES,
+  getBase64DecodedBytes,
+  isBase64Image,
+  uploadBase64ToCloudinary,
+} from '@/lib/cloudinary';
 
 /**
  * POST /api/upload - Upload a base64 image data URI to Cloudinary and return its URL.
@@ -13,6 +18,18 @@ export async function POST(req: NextRequest) {
     if (!isBase64Image(rawImage)) {
       return NextResponse.json(
         { success: false, error: 'Vui lòng gửi ảnh dạng base64 (data:image/...;base64,...)' },
+        { status: 400 }
+      );
+    }
+
+    const decodedBytes = getBase64DecodedBytes(rawImage);
+    if (decodedBytes > MAX_IMAGE_BYTES) {
+      const sizeMb = (decodedBytes / (1024 * 1024)).toFixed(2);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Dung lượng ảnh (${sizeMb} MB) vượt quá giới hạn tối đa 10MB.`,
+        },
         { status: 400 }
       );
     }

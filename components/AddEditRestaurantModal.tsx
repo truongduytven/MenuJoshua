@@ -14,13 +14,16 @@ import {
   CircleDot,
 } from 'lucide-react';
 import { FOOD_PRESET_IMAGES } from '@/lib/storage';
+import { MAX_IMAGE_BYTES } from '@/lib/api';
 import { soundManager } from '@/lib/audio';
+
+const MAX_IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024);
 
 interface AddEditRestaurantModalProps {
   isOpen: boolean;
   initialData?: Restaurant | null;
   onClose: () => void;
-  onSave: (restaurant: Restaurant) => Promise<void> | void;
+  onSave: (restaurant: Restaurant, imageFile?: File | null) => Promise<void> | void;
 }
 
 export function AddEditRestaurantModal({
@@ -32,6 +35,9 @@ export function AddEditRestaurantModal({
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState('');
+  const [imageError, setImageError] = useState<string | null>(null);
   const [eaten, setEaten] = useState(false);
   const [note, setNote] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -41,6 +47,21 @@ export function AddEditRestaurantModal({
   const modalContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!selectedFile) {
+      setPreviewObjectUrl('');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreviewObjectUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedFile]);
+
+  useEffect(() => {
+    setSelectedFile(null);
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     if (initialData) {
       setName(initialData.name || '');
       setAddress(initialData.address || '');
@@ -56,6 +77,24 @@ export function AddEditRestaurantModal({
     }
   }, [initialData, isOpen]);
 
+  const validateAndSelectFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setImageError('Vui lòng chọn đúng tệp hình ảnh (PNG, JPG, WEBP, GIF...).');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      setImageError(
+        `Ảnh vượt quá giới hạn tối đa ${MAX_IMAGE_MB}MB (dung lượng hiện tại: ${sizeMb}MB).`
+      );
+      return;
+    }
+    setImageError(null);
+    setImageUrl('');
+    setSelectedFile(file);
+    soundManager.playSuccessChime();
+  };
+
   // Global paste handler for screenshot / image clipboard
   useEffect(() => {
     if (!isOpen) return;
@@ -68,14 +107,19 @@ export function AddEditRestaurantModal({
         if (items[i].type.indexOf('image') !== -1) {
           const blob = items[i].getAsFile();
           if (blob) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              if (event.target?.result) {
-                setImageUrl(event.target.result as string);
-                soundManager.playSuccessChime();
-              }
-            };
-            reader.readAsDataURL(blob);
+            if (!blob.type.startsWith('image/')) {
+              setImageError('Vui lòng chọn đúng tệp hình ảnh (PNG, JPG, WEBP, GIF...).');
+            } else if (blob.size > MAX_IMAGE_BYTES) {
+              const sizeMb = (blob.size / (1024 * 1024)).toFixed(2);
+              setImageError(
+                `Ảnh vượt quá giới hạn tối đa ${MAX_IMAGE_MB}MB (dung lượng hiện tại: ${sizeMb}MB).`
+              );
+            } else {
+              setImageError(null);
+              setImageUrl('');
+              setSelectedFile(blob);
+              soundManager.playSuccessChime();
+            }
           }
           break;
         }
@@ -88,16 +132,17 @@ export function AddEditRestaurantModal({
 
   if (!isOpen) return null;
 
+  const clearSelectedImage = () => {
+    setSelectedFile(null);
+    setImageUrl('');
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleFileUpload = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setImageUrl(e.target.result as string);
-        soundManager.playSuccessChime();
-      }
-    };
-    reader.readAsDataURL(file);
+    validateAndSelectFile(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -116,7 +161,7 @@ export function AddEditRestaurantModal({
       id: initialData?.id || 'res-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
       name: name.trim(),
       address: address.trim(),
-      imageUrl: imageUrl.trim(),
+      imageUrl: selectedFile ? '' : imageUrl.trim(),
       eaten,
       eatenAt: eaten ? initialData?.eatenAt || new Date().toISOString() : undefined,
       createdAt: initialData?.createdAt || new Date().toISOString(),
@@ -125,7 +170,7 @@ export function AddEditRestaurantModal({
 
     setIsSaving(true);
     try {
-      await onSave(newRestaurant);
+      await onSave(newRestaurant, selectedFile);
       soundManager.playSuccessChime();
     } catch {
       // Error toast is handled by parent onSave
@@ -133,6 +178,10 @@ export function AddEditRestaurantModal({
       setIsSaving(false);
     }
   };
+
+  const activePreviewUrl = previewObjectUrl || imageUrl;
+  const hasPendingUpload =
+    Boolean(selectedFile) || /^data:image\/[a-zA-Z0-9+.-]+;base64,/i.test(imageUrl.trim());
 
   return (
     <div
@@ -174,7 +223,7 @@ export function AddEditRestaurantModal({
               </label>
               <label className="text-[11px] text-[var(--color-primary)] font-bold cursor-pointer hover:underline flex items-center gap-1">
                 <Upload className="w-3 h-3" />
-                <span>Tải ảnh từ máy</span>
+                <span>Tải ảnh từ máy (tối đa {MAX_IMAGE_MB}MB)</span>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -183,6 +232,7 @@ export function AddEditRestaurantModal({
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
                       handleFileUpload(e.target.files[0]);
+                      e.target.value = '';
                     }
                   }}
                 />
@@ -195,14 +245,22 @@ export function AddEditRestaurantModal({
               <input
                 type="text"
                 value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="Dán link ảnh tại đây (https://images.unsplash.com/... hoặc link ảnh bất kỳ)"
+                onChange={(e) => {
+                  setSelectedFile(null);
+                  setImageError(null);
+                  setImageUrl(e.target.value);
+                }}
+                placeholder={
+                  selectedFile
+                    ? `Đã chọn tệp "${selectedFile.name}" (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB) — sẽ upload khi lưu`
+                    : 'Dán link ảnh tại đây (https://images.unsplash.com/... hoặc link ảnh bất kỳ)'
+                }
                 className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-light)]"
               />
-              {imageUrl && (
+              {activePreviewUrl && (
                 <button
                   type="button"
-                  onClick={() => setImageUrl('')}
+                  onClick={clearSelectedImage}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-500 hover:text-stone-700 dark:hover:text-stone-200 flex items-center justify-center transition-colors"
                 >
                   <X className="w-3 h-3" />
@@ -210,11 +268,18 @@ export function AddEditRestaurantModal({
               )}
             </div>
 
+            {imageError && (
+              <p className="text-xs font-semibold text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                {imageError}
+              </p>
+            )}
+
             {/* Image Preview or Drop Zone */}
-            {imageUrl ? (
+            {activePreviewUrl ? (
               <div className="relative group/preview w-full h-44 rounded-2xl overflow-hidden border border-[var(--color-border)] bg-stone-900 shadow-xs">
                 <img
-                  src={imageUrl}
+                  key={activePreviewUrl}
+                  src={activePreviewUrl}
                   alt="Preview"
                   className="w-full h-full object-cover transition-transform duration-300 group-hover/preview:scale-105"
                   onError={(e) => {
@@ -224,11 +289,13 @@ export function AddEditRestaurantModal({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-end justify-between p-3">
                   <span className="text-[11px] font-bold text-white/90 bg-black/50 px-2.5 py-1 rounded-lg backdrop-blur-sm">
-                    Xem trước ảnh
+                    {selectedFile
+                      ? `${selectedFile.name || 'Ảnh dán'} • ${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
+                      : 'Xem trước ảnh'}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setImageUrl('')}
+                    onClick={clearSelectedImage}
                     className="text-xs font-bold text-rose-300 bg-rose-950/80 hover:bg-rose-900 px-3 py-1 rounded-lg transition-colors"
                   >
                     Xóa ảnh này
@@ -253,7 +320,7 @@ export function AddEditRestaurantModal({
                 <div className="flex items-center justify-center gap-2 text-[var(--color-text-secondary)]">
                   <ImageIcon className="w-4 h-4 text-[var(--color-primary)]" />
                   <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                    Chưa có ảnh (Bạn có thể dán link URL ở trên, kéo thả ảnh hoặc bấm Ctrl+V)
+                    Chưa có ảnh (Dán link URL ở trên, kéo thả ảnh hoặc bấm Ctrl+V • tối đa {MAX_IMAGE_MB}MB)
                   </span>
                 </div>
               </div>
@@ -271,6 +338,8 @@ export function AddEditRestaurantModal({
                     type="button"
                     onClick={() => {
                       soundManager.playClick();
+                      setSelectedFile(null);
+                      setImageError(null);
                       setImageUrl(preset.url);
                     }}
                     className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-all"
@@ -379,7 +448,7 @@ export function AddEditRestaurantModal({
               className="btn-primary px-6 py-2.5 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving
-                ? imageUrl.trim().startsWith('data:image/')
+                ? hasPendingUpload
                   ? 'Đang tải ảnh & lưu...'
                   : 'Đang lưu...'
                 : initialData

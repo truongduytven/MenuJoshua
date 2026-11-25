@@ -201,12 +201,15 @@ function MainApp() {
   };
 
   // Save new or updated restaurant
-  const handleSaveRestaurant = async (item: Restaurant) => {
+  const handleSaveRestaurant = async (item: Restaurant, imageFile?: File | null) => {
     const exists = restaurants.some((r) => r.id === item.id);
 
     try {
       let itemToSave = item;
-      if (/^data:image\/[a-zA-Z0-9+.-]+;base64,/i.test(item.imageUrl)) {
+      if (imageFile) {
+        const uploadedUrl = await uploadImageApi(imageFile, item.id);
+        itemToSave = { ...item, imageUrl: uploadedUrl };
+      } else if (/^data:image\/[a-zA-Z0-9+.-]+;base64,/i.test(item.imageUrl)) {
         const uploadedUrl = await uploadImageApi(item.imageUrl, item.id);
         itemToSave = { ...item, imageUrl: uploadedUrl };
       }

@@ -1,13 +1,35 @@
 import crypto from 'node:crypto';
 
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 const BASE64_IMAGE_REGEX = /^data:image\/[a-zA-Z0-9+.-]+;base64,/i;
 const DEFAULT_CLOUDINARY_FOLDER = 'menu_joshua';
+
+export interface CloudinarySignaturePayload {
+  cloudName: string;
+  apiKey: string;
+  timestamp: string;
+  folder: string;
+  signature: string;
+  publicId?: string;
+  overwrite?: string;
+}
 
 /**
  * Return true when the provided image string is a base64 data URI.
  */
 export function isBase64Image(value?: string | null): value is string {
   return typeof value === 'string' && BASE64_IMAGE_REGEX.test(value.trim());
+}
+
+/**
+ * Compute decoded byte length of a base64 data URI.
+ */
+export function getBase64DecodedBytes(dataUri: string): number {
+  const commaIdx = dataUri.indexOf(',');
+  if (commaIdx === -1) return 0;
+  const base64Body = dataUri.slice(commaIdx + 1).replace(/\s+/g, '');
+  const padding = base64Body.endsWith('==') ? 2 : base64Body.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((base64Body.length * 3) / 4) - padding);
 }
 
 function getCloudinaryConfig() {
@@ -38,17 +60,9 @@ function signCloudinaryParams(params: Record<string, string>, apiSecret: string)
 }
 
 /**
- * Upload a base64 image data URI to Cloudinary and return its HTTPS secure_url.
+ * Create a short-lived signed upload payload for direct browser-to-Cloudinary uploads.
  */
-export async function uploadBase64ToCloudinary(
-  dataUri: string,
-  publicId?: string
-): Promise<string> {
-  const trimmed = dataUri.trim();
-  if (!isBase64Image(trimmed)) {
-    throw new Error('Chuỗi ảnh không đúng định dạng base64 data URI.');
-  }
-
+export function createCloudinaryUploadSignature(publicId?: string): CloudinarySignaturePayload {
   const { cloudName, apiKey, apiSecret, folder } = getCloudinaryConfig();
   const timestamp = String(Math.floor(Date.now() / 1000));
 
@@ -65,18 +79,50 @@ export async function uploadBase64ToCloudinary(
 
   const signature = signCloudinaryParams(signedParams, apiSecret);
 
+  return {
+    cloudName,
+    apiKey,
+    timestamp,
+    folder,
+    signature,
+    ...(sanitizedId ? { publicId: sanitizedId, overwrite: 'true' } : {}),
+  };
+}
+
+/**
+ * Upload a base64 image data URI to Cloudinary and return its HTTPS secure_url.
+ */
+export async function uploadBase64ToCloudinary(
+  dataUri: string,
+  publicId?: string
+): Promise<string> {
+  const trimmed = dataUri.trim();
+  if (!isBase64Image(trimmed)) {
+    throw new Error('Chuỗi ảnh không đúng định dạng base64 data URI.');
+  }
+
+  const decodedBytes = getBase64DecodedBytes(trimmed);
+  if (decodedBytes > MAX_IMAGE_BYTES) {
+    const sizeMb = (decodedBytes / (1024 * 1024)).toFixed(2);
+    throw new Error(`Dung lượng ảnh (${sizeMb} MB) vượt quá giới hạn tối đa 10MB.`);
+  }
+
+  const sig = createCloudinaryUploadSignature(publicId);
+
   const form = new FormData();
   form.append('file', trimmed);
-  form.append('api_key', apiKey);
-  form.append('timestamp', timestamp);
-  form.append('folder', folder);
-  if (signedParams.public_id) {
-    form.append('public_id', signedParams.public_id);
-    form.append('overwrite', signedParams.overwrite);
+  form.append('api_key', sig.apiKey);
+  form.append('timestamp', sig.timestamp);
+  form.append('folder', sig.folder);
+  if (sig.publicId) {
+    form.append('public_id', sig.publicId);
   }
-  form.append('signature', signature);
+  if (sig.overwrite) {
+    form.append('overwrite', sig.overwrite);
+  }
+  form.append('signature', sig.signature);
 
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
     method: 'POST',
     body: form,
   });
